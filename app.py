@@ -53,19 +53,18 @@ async def get_docsis_data(modem_hostname, modem_username, modem_password, encryp
             ) as client:
                 await client.login()
 
-                # These XPaths are common, but may need to be adjusted for your modem.
-                # Use discover.py to find the correct paths for your device.
-                #interface_info = await client.get_value_by_xpath("Device/Docsis/Interface/1") or {}
-                cable_modem = await client.get_value_by_xpath("device/docsis/cable_modem") or {}
-                downstream_raw = await client.get_value_by_xpath("device/docsis/cable_modem/downstreams") or {}
-                upstream_raw = await client.get_value_by_xpath("device/docsis/cable_modem/upstreams") or {}
+                # Fetch the entire device tree at once, as deep paths are not supported.
+                device_info = await client.get_value_by_xpath("Device") or {}
 
-                if not downstream_raw and not downstream_raw and not upstream_raw:
+                # Navigate the structure in Python
+                docsis_data = device_info.get("device", {}).get("docsis", {})
+                cable_modem = docsis_data.get("cable_modem", {})
+                downstream_channels = cable_modem.get("downstreams", [])
+                upstream_channels = cable_modem.get("upstreams", [])
+
+                if not downstream_channels and not upstream_channels:
                     _LOGGER.error("Could not retrieve any DOCSIS information. Please check XPaths and modem mode.")
                     return None
-
-                downstream_channels = list(downstream_raw.values())
-                upstream_channels = list(upstream_raw.values())
 
                 ds_power = [float(ch['power_level']) for ch in downstream_channels if 'power_level' in ch and ch.get('power_level')]
                 ds_snr = [float(ch['SNR']) for ch in downstream_channels if 'SNR' in ch and ch.get('SNR')]
