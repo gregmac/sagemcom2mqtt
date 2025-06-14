@@ -78,7 +78,7 @@ async def main():
     else:
         encryption_method = EncryptionMethod.SHA512
 
-    client = SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method)
+    client = SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, verify_ssl=False)
 
     # One-shot test mode
     if not mqtt_hostname:
