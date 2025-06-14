@@ -5,6 +5,7 @@ import asyncio
 import logging
 import paho.mqtt.client as mqtt
 import aiohttp
+from aiohttp import TCPConnector
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
 
@@ -24,9 +25,11 @@ async def get_docsis_data(modem_hostname, modem_username, modem_password, encryp
     trace_config.on_request_start.append(on_request_start)
     trace_config.on_request_end.append(on_request_end)
 
+    connector = TCPConnector(ssl=False)
+
     try:
-        async with aiohttp.ClientSession(trace_configs=[trace_config]) as session:
-            async with SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, session=session, verify_ssl=False) as client:
+        async with aiohttp.ClientSession(trace_configs=[trace_config], connector=connector) as session:
+            async with SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, session=session) as client:
                 await client.login()
                 device_info = await client.get_device_info()
                 wan_info = await client.get_wan_information()
