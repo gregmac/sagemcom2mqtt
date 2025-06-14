@@ -104,4 +104,26 @@ services:
 Then, run it with:
 ```sh
 docker-compose up -d
-``` 
+```
+
+## API Discovery
+
+Sagemcom modems can have different API paths (XPaths) for the same data depending on the model and firmware. If the application fails to retrieve data and you see `XMO_INVALID_PATH_ERR` in the logs, the XPaths in `app.py` may be incorrect for your device.
+
+To find the correct paths, you can use the `discover.py` script included in this project.
+
+### Running the Discovery Script
+
+1.  Set the same environment variables you use for the main application (`MODEM_HOSTNAME`, `MODEM_USERNAME`, `MODEM_PASSWORD`).
+
+2.  Run the script from within the Docker container or a local Python environment:
+    ```sh
+    python discover.py
+    ```
+    This will print a large JSON object representing the entire API tree, starting from the `Device` root.
+
+3.  You can also explore specific paths by passing an argument:
+    ```sh
+    python discover.py Device/Docsis/Cable
+    ```
+4.  Once you find the correct paths for the downstream, upstream, and interface status data, you can update the `get_docsis_data` function in `app.py`. 
