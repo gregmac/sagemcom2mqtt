@@ -1,0 +1,2 @@
+sagemcom_api
+paho-mqtt 
