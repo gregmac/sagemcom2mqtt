@@ -21,32 +21,28 @@ async def get_docsis_data(modem_hostname, modem_username, modem_password, encryp
             verify_ssl=False
         ) as client:
             await client.login()
-            device_info = await client.get_device_info()
-            wan_info = await client.get_wan_information()
 
-            if wan_info.get('interface_type') != 'DOCSIS':
-                logging.error("Error: Modem is not in DOCSIS mode.")
+            # These XPaths are common, but may need to be adjusted for your modem.
+            # Use discover.py to find the correct paths for your device.
+            #interface_info = await client.get_value_by_xpath("Device/Docsis/Interface/1") or {}
+            cable_modem = await client.get_value_by_xpath("device/docsis/cable_modem") or {}
+            downstream_raw = await client.get_value_by_xpath("device/docsis/cable_modem/downstreams") or {}
+            upstream_raw = await client.get_value_by_xpath("device/docsis/cable_modem/upstreams") or {}
+
+            if not downstream_raw and not downstream_raw and not upstream_raw:
+                logging.error("Could not retrieve any DOCSIS information. Please check XPaths and modem mode.")
                 return None
-            
-            docsis_info = wan_info.get('docsis_info', {})
-            
-            downstream_channels = docsis_info.get('downstream', [])
-            upstream_channels = docsis_info.get('upstream', [])
 
-            if not downstream_channels or not upstream_channels:
-                return {
-                    "registration_status": docsis_info.get('registration_status'),
-                    "operational_status": "Not available",
-                    "error": "Downstream or upstream channel data not found"
-                }
+            downstream_channels = list(downstream_raw.values())
+            upstream_channels = list(upstream_raw.values())
 
-            ds_power = [ch['power'] for ch in downstream_channels if 'power' in ch]
-            ds_snr = [ch['snr'] for ch in downstream_channels if 'snr' in ch]
-            us_power = [ch['power'] for ch in upstream_channels if 'power' in ch]
+            ds_power = [float(ch['power_level']) for ch in downstream_channels if 'power_level' in ch and ch.get('power_level')]
+            ds_snr = [float(ch['SNR']) for ch in downstream_channels if 'SNR' in ch and ch.get('SNR')]
+            us_power = [float(ch['power_level']) for ch in upstream_channels if 'power_level' in ch and ch.get('power_level')]
 
             data = {
-                "registration_status": docsis_info.get('registration_status'),
-                "operational_status": docsis_info.get('operational_status'),
+                "status": cable_modem.get('status'),
+                #"operational_status": interface_info.get('OperationalStatus'),
                 "downstream_channels_connected": len(downstream_channels),
                 "downstream_power_min_dbmv": min(ds_power) if ds_power else None,
                 "downstream_power_avg_dbmv": round(sum(ds_power) / len(ds_power), 2) if ds_power else None,
