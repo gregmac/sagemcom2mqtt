@@ -5,17 +5,14 @@ import asyncio
 import logging
 import paho.mqtt.client as mqtt
 import aiohttp
-from aiohttp import TCPConnector
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
 
-# Define trace functions for aiohttp
 async def on_request_start(session, trace_config_ctx, params):
     logging.info(f"HTTP Request: {params.method} {params.url}")
 
 async def on_request_end(session, trace_config_ctx, params):
     logging.info(f"HTTP Response: {params.response.status} for {params.method} {params.url}")
-
 
 async def get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method):
     """
@@ -24,11 +21,16 @@ async def get_docsis_data(modem_hostname, modem_username, modem_password, encryp
     trace_config = aiohttp.TraceConfig()
     trace_config.on_request_start.append(on_request_start)
     trace_config.on_request_end.append(on_request_end)
-
-    connector = TCPConnector(ssl=False)
+    
+    connector = aiohttp.TCPConnector(ssl=False)
+    jar = aiohttp.CookieJar(unsafe=True)
 
     try:
-        async with aiohttp.ClientSession(trace_configs=[trace_config], connector=connector) as session:
+        async with aiohttp.ClientSession(
+            connector=connector,
+            cookie_jar=jar,
+            trace_configs=[trace_config]
+        ) as session:
             async with SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, session=session) as client:
                 await client.login()
                 device_info = await client.get_device_info()
@@ -88,7 +90,7 @@ async def main():
     mqtt_topic = os.getenv("MQTT_TOPIC", "sagemcom/docsis/status")
 
     if not all([modem_hostname, modem_username, modem_password]):
-        print("Error: MODEM_HOSTNAME, MODEM_USERNAME, and MODEM_PASSWORD must be set.")
+        logging.error("Error: MODEM_HOSTNAME, MODEM_USERNAME, and MODEM_PASSWORD must be set.")
         return
 
     if encryption_str == "MD5":
