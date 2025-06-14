@@ -1,2 +1,3 @@
 sagemcom_api
-paho-mqtt 
+paho-mqtt
+aiohttp 

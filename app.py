@@ -2,58 +2,73 @@ import os
 import time
 import json
 import asyncio
+import logging
 import paho.mqtt.client as mqtt
+import aiohttp
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
+
+# Define trace functions for aiohttp
+async def on_request_start(session, trace_config_ctx, params):
+    logging.info(f"HTTP Request: {params.method} {params.url}")
+
+async def on_request_end(session, trace_config_ctx, params):
+    logging.info(f"HTTP Response: {params.response.status} for {params.method} {params.url}")
+
 
 async def get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method):
     """
     Retrieves DOCSIS information from the Sagemcom modem.
     """
+    trace_config = aiohttp.TraceConfig()
+    trace_config.on_request_start.append(on_request_start)
+    trace_config.on_request_end.append(on_request_end)
+
     try:
-        async with SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, verify_ssl=False) as client:
-            await client.login()
-            device_info = await client.get_device_info()
-            wan_info = await client.get_wan_information()
+        async with aiohttp.ClientSession(trace_configs=[trace_config]) as session:
+            async with SagemcomClient(modem_hostname, modem_username, modem_password, encryption_method, session=session, verify_ssl=False) as client:
+                await client.login()
+                device_info = await client.get_device_info()
+                wan_info = await client.get_wan_information()
 
-            if wan_info.get('interface_type') != 'DOCSIS':
-                print("Error: Modem is not in DOCSIS mode.")
-                return None
-            
-            docsis_info = wan_info.get('docsis_info', {})
-            
-            downstream_channels = docsis_info.get('downstream', [])
-            upstream_channels = docsis_info.get('upstream', [])
+                if wan_info.get('interface_type') != 'DOCSIS':
+                    logging.error("Error: Modem is not in DOCSIS mode.")
+                    return None
+                
+                docsis_info = wan_info.get('docsis_info', {})
+                
+                downstream_channels = docsis_info.get('downstream', [])
+                upstream_channels = docsis_info.get('upstream', [])
 
-            if not downstream_channels or not upstream_channels:
-                return {
+                if not downstream_channels or not upstream_channels:
+                    return {
+                        "registration_status": docsis_info.get('registration_status'),
+                        "operational_status": "Not available",
+                        "error": "Downstream or upstream channel data not found"
+                    }
+
+                ds_power = [ch['power'] for ch in downstream_channels if 'power' in ch]
+                ds_snr = [ch['snr'] for ch in downstream_channels if 'snr' in ch]
+                us_power = [ch['power'] for ch in upstream_channels if 'power' in ch]
+
+                data = {
                     "registration_status": docsis_info.get('registration_status'),
-                    "operational_status": "Not available",
-                    "error": "Downstream or upstream channel data not found"
+                    "operational_status": docsis_info.get('operational_status'),
+                    "downstream_channels_connected": len(downstream_channels),
+                    "downstream_power_min_dbmv": min(ds_power) if ds_power else None,
+                    "downstream_power_avg_dbmv": round(sum(ds_power) / len(ds_power), 2) if ds_power else None,
+                    "downstream_power_max_dbmv": max(ds_power) if ds_power else None,
+                    "downstream_snr_avg_db": round(sum(ds_snr) / len(ds_snr), 2) if ds_snr else None,
+                    "downstream_snr_max_db": max(ds_snr) if ds_snr else None,
+                    "upstream_channels_connected": len(upstream_channels),
+                    "upstream_power_min_dbmv": min(us_power) if us_power else None,
+                    "upstream_power_avg_dbmv": round(sum(us_power) / len(us_power), 2) if us_power else None,
+                    "upstream_power_max_dbmv": max(us_power) if us_power else None,
                 }
-
-            ds_power = [ch['power'] for ch in downstream_channels if 'power' in ch]
-            ds_snr = [ch['snr'] for ch in downstream_channels if 'snr' in ch]
-            us_power = [ch['power'] for ch in upstream_channels if 'power' in ch]
-
-            data = {
-                "registration_status": docsis_info.get('registration_status'),
-                "operational_status": docsis_info.get('operational_status'),
-                "downstream_channels_connected": len(downstream_channels),
-                "downstream_power_min_dbmv": min(ds_power) if ds_power else None,
-                "downstream_power_avg_dbmv": round(sum(ds_power) / len(ds_power), 2) if ds_power else None,
-                "downstream_power_max_dbmv": max(ds_power) if ds_power else None,
-                "downstream_snr_avg_db": round(sum(ds_snr) / len(ds_snr), 2) if ds_snr else None,
-                "downstream_snr_max_db": max(ds_snr) if ds_snr else None,
-                "upstream_channels_connected": len(upstream_channels),
-                "upstream_power_min_dbmv": min(us_power) if us_power else None,
-                "upstream_power_avg_dbmv": round(sum(us_power) / len(us_power), 2) if us_power else None,
-                "upstream_power_max_dbmv": max(us_power) if us_power else None,
-            }
-            return data
+                return data
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}", exc_info=True)
         return None
 
 async def main():
@@ -80,7 +95,7 @@ async def main():
 
     # One-shot test mode
     if not mqtt_hostname:
-        print("MQTT_HOSTNAME not set. Running in one-shot test mode.")
+        logging.info("MQTT_HOSTNAME not set. Running in one-shot test mode.")
         data = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
         if data:
             print(json.dumps(data, indent=4))
@@ -95,18 +110,19 @@ async def main():
         mqtt_client.connect(mqtt_hostname, mqtt_port, 60)
         mqtt_client.loop_start()
     except Exception as e:
-        print(f"Error connecting to MQTT broker: {e}")
+        logging.error(f"Error connecting to MQTT broker: {e}")
         return
 
     while True:
         data = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
         if data:
             mqtt_client.publish(mqtt_topic, payload=json.dumps(data), qos=0, retain=False)
-            print(f"Published data to MQTT topic '{mqtt_topic}'")
+            logging.info(f"Published data to MQTT topic '{mqtt_topic}'")
         else:
-            print("Failed to retrieve data from modem.")
+            logging.warning("Failed to retrieve data from modem.")
 
         await asyncio.sleep(poll_interval)
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     asyncio.run(main()) 
