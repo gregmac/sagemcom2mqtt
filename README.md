@@ -135,16 +135,33 @@ The `sagemcom_api` library allows you to explore the device's API to find the co
 
 ### Running the Discovery Script
 
+The script will connect to the modem and print its API data structure as a large JSON object to your console. To save this output for analysis or for use with the unit tests, you can redirect the output to a file.
+
 1.  Set the same environment variables you use for the main application (`MODEM_HOSTNAME`, `MODEM_USERNAME`, `MODEM_PASSWORD`).
 
-2.  Run the script from within the Docker container or a local Python environment:
-    ```sh
-    python discover.py
-    ```
-    This will print a large JSON object representing the entire API tree, starting from the `Device` root.
+2.  Run the script and redirect the output to a new file in the `modems` directory.
 
-3.  You can also explore specific paths by passing an argument:
+    **Example:**
     ```sh
-    python discover.py Device/Docsis/Cable
+    # Set your modem credentials first (example for PowerShell)
+    $env:SAGEMCOM_HOSTNAME="192.168.100.1"
+    $env:SAGEMCOM_USERNAME="your_username"
+    $env:SAGEMCOM_PASSWORD="your_password"
+
+    # Run the script and save the output
+    python discover.py > modems/my_modem_dump.json
+    ```
+
+    or using Docker:
+
+    ```sh
+    docker run --rm sagemcom-mqtt python discover.py > modems/my_modem_dump.json
+    ```
+
+3.  The resulting `.json` file can then be inspected to find the correct paths for your device, or used as a new test case for the unit tests.
+
+4.  You can also explore specific sub-paths by passing them as an argument:
+    ```sh
+    python discover.py Device/Docsis/cable_modem/downstreams
     ```
 4.  Once you find the correct paths for the downstream, upstream, and interface status data, you can update the `get_docsis_data` function in `app.py`. 
