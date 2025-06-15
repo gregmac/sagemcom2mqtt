@@ -32,12 +32,14 @@ async def on_request_end(session, trace_config_ctx, params):
 def parse_docsis_data(device_info):
     """
     Parses the DOCSIS information from the raw device info dictionary.
+    Returns a tuple of (parsed_data, serial_number).
     """
     if not device_info:
         _LOGGER.error("Device info is empty, cannot parse DOCSIS data.")
-        return None
+        return None, None
 
     # Navigate the structure in Python
+    serial_number = device_info.get("device", {}).get("device_info", {}).get("serial_number")
     docsis_data = device_info.get("device", {}).get("docsis", {})
     cable_modem = docsis_data.get("cable_modem", {})
     downstream_channels = cable_modem.get("downstreams", [])
@@ -45,28 +47,35 @@ def parse_docsis_data(device_info):
 
     if not downstream_channels and not upstream_channels:
         _LOGGER.error("Could not retrieve any DOCSIS information. Please check XPaths and modem mode.")
-        return None
+        return None, None
 
     ds_power = [float(ch['power_level']) for ch in downstream_channels if 'power_level' in ch and ch.get('power_level')]
     us_power = [float(ch['power_level']) for ch in upstream_channels if 'power_level' in ch and ch.get('power_level')]
-
     ds_snr = [float(ch['SNR']) for ch in downstream_channels if 'SNR' in ch and ch.get('SNR')]
-
     correctable = sum([int(ch['correctable_codewords']) for ch in downstream_channels if 'correctable_codewords' in ch and ch.get('correctable_codewords')])
     uncorrectable = sum([int(ch['uncorrectable_codewords']) for ch in downstream_channels if 'uncorrectable_codewords' in ch and ch.get('uncorrectable_codewords')])
 
-    # Prepare data for MQTT
+    # Prepare data for MQTT in a nested structure for individual publishing
     data = {
-        'ds_power_avg': round(sum(ds_power) / len(ds_power), 2) if ds_power else 0,
-        'us_power_avg': round(sum(us_power) / len(us_power), 2) if us_power else 0,
-        'ds_snr_avg': round(sum(ds_snr) / len(ds_snr), 2) if ds_snr else 0,
-        'correctable_sum': correctable,
-        'uncorrectable_sum': uncorrectable,
-        'downstream_channels': len(downstream_channels),
-        'upstream_channels': len(upstream_channels),
+        'status': cable_modem.get('status', 'UNKNOWN'),
+        'downstream': {
+            'power_avg_dbmv': round(sum(ds_power) / len(ds_power), 2) if ds_power else 0,
+            'power_min_dbmv': min(ds_power) if ds_power else 0,
+            'power_max_dbmv': max(ds_power) if ds_power else 0,
+            'snr_avg_db': round(sum(ds_snr) / len(ds_snr), 2) if ds_snr else 0,
+            'channels': len(downstream_channels),
+            'correctable_sum': correctable,
+            'uncorrectable_sum': uncorrectable,
+        },
+        'upstream': {
+            'power_avg_dbmv': round(sum(us_power) / len(us_power), 2) if us_power else 0,
+            'power_min_dbmv': min(us_power) if us_power else 0,
+            'power_max_dbmv': max(us_power) if us_power else 0,
+            'channels': len(upstream_channels),
+        }
     }
 
-    return data
+    return data, serial_number
 
 # Create a TraceConfig for logging HTTP requests
 trace_config = aiohttp.TraceConfig()
@@ -116,7 +125,7 @@ async def main():
     mqtt_port = int(os.getenv("MQTT_PORT", 1883))
     mqtt_username = os.getenv("MQTT_USERNAME")
     mqtt_password = os.getenv("MQTT_PASSWORD")
-    mqtt_topic = os.getenv("MQTT_TOPIC", "sagemcom/docsis/status")
+    mqtt_topic = os.getenv("MQTT_TOPIC", "sagemcom/docsis")
 
     if not all([modem_hostname, modem_username, modem_password]):
         _LOGGER.error("Error: MODEM_HOSTNAME, MODEM_USERNAME, and MODEM_PASSWORD must be set.")
@@ -148,15 +157,30 @@ async def main():
         return
 
     while True:
-        docsis_data = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
+        result = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
 
-        if docsis_data:
-            # Set MQTTv5 properties for message expiry
-            properties = Properties(PacketTypes.PUBLISH)
-            properties.MessageExpiryInterval = poll_interval * 4
-            # Publish to MQTT
-            mqtt_client.publish(mqtt_topic, json.dumps(docsis_data), properties=properties)
-            _LOGGER.info(f"Published to {mqtt_topic} with expiry of {poll_interval * 4}s: {docsis_data}")
+        if result:
+            docsis_data, serial_number = result
+            if docsis_data and serial_number:
+                base_topic = f"{mqtt_topic}/{serial_number}"
+                properties = Properties(PacketTypes.PUBLISH)
+                properties.MessageExpiryInterval = poll_interval * 4
+
+                # Recursively publish each metric to its own topic
+                def publish_metrics(topic_parts, data):
+                    for key, value in data.items():
+                        new_topic_parts = topic_parts + [key]
+                        if isinstance(value, dict):
+                            publish_metrics(new_topic_parts, value)
+                        else:
+                            full_topic = "/".join(new_topic_parts)
+                            mqtt_client.publish(full_topic, str(value), properties=properties)
+                            _LOGGER.info(f"Published to {full_topic}: {value}")
+                
+                publish_metrics([base_topic], docsis_data)
+                
+            elif docsis_data:
+                _LOGGER.warning(f"Could not determine serial number. Cannot publish individual metrics.")
 
         # Wait for the next interval
         await asyncio.sleep(poll_interval)
