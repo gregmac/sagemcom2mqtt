@@ -139,8 +139,8 @@ def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, 
         "downstream/power_max_dbmv": {"name": "Downstream Power Max", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-3"},
         "downstream/snr_avg_db": {"name": "Downstream SNR Avg", "unit_of_measurement": "dB", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:gauge"},
         "downstream/channels": {"name": "Downstream Channels", "icon": "mdi:counter", "state_class": "measurement"},
-        "downstream/correctable_sum": {"name": "Downstream Correctable Errors", "icon": "mdi:counter", "state_class": "total_increasing"},
-        "downstream/uncorrectable_sum": {"name": "Downstream Uncorrectable Errors", "icon": "mdi:counter", "state_class": "total_increasing"},
+        "downstream/correctable_per_minute": {"name": "Downstream Correctable Rate", "unit_of_measurement": "errors/min", "state_class": "measurement", "icon": "mdi:wifi-check"},
+        "downstream/uncorrectable_per_minute": {"name": "Downstream Uncorrectable Rate", "unit_of_measurement": "errors/min", "state_class": "measurement", "icon": "mdi:wifi-cancel"},
         "upstream/power_avg_dbmv": {"name": "Upstream Power Avg", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-2"},
         "upstream/power_min_dbmv": {"name": "Upstream Power Min", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-1"},
         "upstream/power_max_dbmv": {"name": "Upstream Power Max", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-3"},
@@ -248,15 +248,59 @@ async def main():
         _LOGGER.error(f"Error connecting to MQTT broker: {e}")
         return
 
+    # State for rate calculation
+    last_poll_time = None
+    last_correctable_sum = None
+    last_uncorrectable_sum = None
     discovery_published = False
+
     while True:
         result = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
+        current_poll_time = time.time()
 
         if result:
             mqtt_data, device_metadata = result
             serial_number = device_metadata.get('serial_number') if device_metadata else None
 
             if mqtt_data and serial_number:
+                # Calculate error rates
+                current_correctable_sum = mqtt_data.get('downstream', {}).get('correctable_sum', 0)
+                current_uncorrectable_sum = mqtt_data.get('downstream', {}).get('uncorrectable_sum', 0)
+
+                correctable_per_minute = 0
+                uncorrectable_per_minute = 0
+
+                if last_poll_time is not None and last_correctable_sum is not None:
+                    time_delta = current_poll_time - last_poll_time
+
+                    # Handle counter resets (e.g., modem reboot) by checking for negative delta
+                    correctable_delta = current_correctable_sum - last_correctable_sum
+                    if correctable_delta < 0:
+                        correctable_delta = 0 # Counter reset, so rate for this period is 0
+
+                    uncorrectable_delta = current_uncorrectable_sum - last_uncorrectable_sum
+                    if uncorrectable_delta < 0:
+                        uncorrectable_delta = 0 # Counter reset
+
+                    if time_delta > 0:
+                        correctable_per_minute = (correctable_delta / time_delta) * 60
+                        uncorrectable_per_minute = (uncorrectable_delta / time_delta) * 60
+                        _LOGGER.debug(f"Calculated error rates: time_delta={time_delta:.2f}s")
+                        _LOGGER.debug(f"  Correctable current: {current_correctable_sum}, delta: {correctable_delta}, per min: {correctable_per_minute:.2f}")
+                        _LOGGER.debug(f"  Uncorrectable current: {current_uncorrectable_sum}, delta: {uncorrectable_delta}, per min: {uncorrectable_per_minute:.2f}")
+
+                # Update state for the next iteration
+                last_poll_time = current_poll_time
+                last_correctable_sum = current_correctable_sum
+                last_uncorrectable_sum = current_uncorrectable_sum
+
+                # Replace sum values with calculated rates for publishing
+                if 'downstream' in mqtt_data:
+                    del mqtt_data['downstream']['correctable_sum']
+                    del mqtt_data['downstream']['uncorrectable_sum']
+                    mqtt_data['downstream']['correctable_per_minute'] = round(correctable_per_minute, 2)
+                    mqtt_data['downstream']['uncorrectable_per_minute'] = round(uncorrectable_per_minute, 2)
+                
                 # Publish Home Assistant discovery on the first successful data fetch
                 if ha_discovery_prefix and not discovery_published:
                     publish_ha_discovery_config(mqtt_client, ha_discovery_prefix, device_metadata, mqtt_topic)
