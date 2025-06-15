@@ -98,7 +98,16 @@ def parse_docsis_data(device_info):
         }
     }
 
-    # Additional metadata (not for MQTT)
+    # Add system metrics to MQTT data and collect device metadata
+    process_status = device_info_data.get("process_status", {})
+    memory_status = device_info_data.get("memory_status", {})
+    
+    mqtt_data['system'] = {
+        'cpu_usage': int(process_status.get("cpu_usage") or 0),
+        'load_average_1m': round(float(process_status.get("load_average", {}).get("load1") or 0.0), 2),
+        'free_memory_percentage': int(memory_status.get("free_memory_percentage") or 0),
+    }
+
     device_metadata = {
         'serial_number': device_info_data.get('serial_number'),
         'manufacturer': device_info_data.get('manufacturer'),
@@ -153,6 +162,9 @@ def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, 
         "upstream/power_min_dbmv": {"name": "Upstream Power Min", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-1"},
         "upstream/power_max_dbmv": {"name": "Upstream Power Max", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement", "icon": "mdi:signal-cellular-3"},
         "upstream/channels": {"name": "Upstream Channels", "icon": "mdi:counter", "state_class": "measurement"},
+        "system/cpu_usage": {"name": "CPU Usage", "unit_of_measurement": "%", "state_class": "measurement", "icon": "mdi:cpu-64-bit"},
+        "system/load_average_1m": {"name": "Load Average (1m)", "state_class": "measurement", "icon": "mdi:chip"},
+        "system/free_memory_percentage": {"name": "Free Memory", "unit_of_measurement": "%", "state_class": "measurement", "icon": "mdi:memory"},
     }
 
     for metric_path, config in sensors.items():
