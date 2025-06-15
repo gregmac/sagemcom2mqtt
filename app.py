@@ -14,9 +14,17 @@ import traceback
 
 __version__ = "1.1.0"
 
+# Get log level from environment variable, default to INFO
+log_level_name = os.getenv('LOG_LEVEL', 'INFO').upper()
+# Ensure the log level is a valid one
+try:
+    log_level = getattr(logging, log_level_name)
+except AttributeError:
+    log_level = logging.INFO # Default to INFO if invalid level is provided
+
 # Basic logging configuration for the application
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 _LOGGER = logging.getLogger(__name__)
@@ -171,7 +179,7 @@ def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, 
         payload.update({k: v for k, v in config.items() if k not in ["name"]})
 
         mqtt_client.publish(config_topic, json.dumps(payload), retain=True)
-        _LOGGER.debug(f"Published discovery config for {unique_id} to {config_topic}")
+        _LOGGER.info(f"Published discovery config for {unique_id} to {config_topic}")
 
 async def get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method):
     """
