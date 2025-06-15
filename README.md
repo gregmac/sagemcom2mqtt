@@ -106,11 +106,32 @@ Then, run it with:
 docker-compose up -d
 ```
 
-## API Discovery
+## Running Tests
 
-Sagemcom modems can have different API paths (XPaths) for the same data depending on the model and firmware. If the application fails to retrieve data and you see `XMO_INVALID_PATH_ERR` in the logs, the XPaths in `app.py` may be incorrect for your device.
+This project includes a unit test suite to validate the data parsing logic against sample modem data.
 
-To find the correct paths, you can use the `discover.py` script included in this project.
+### Local
+To run the tests locally, ensure you have installed the dependencies from `requirements.txt` and run:
+```sh
+python test_app.py
+```
+
+### Using Docker
+To run the tests within a Docker container, you must first build the image. Then, you can execute the test script inside a new container.
+
+1.  **Build the image:**
+    ```sh
+    docker build -t sagemcom-mqtt .
+    ```
+
+2.  **Run the tests:**
+    ```sh
+    docker run --rm sagemcom-mqtt python test_app.py
+    ```
+
+## Discovering API Paths (discover.py)
+
+The `sagemcom_api` library allows you to explore the device's API to find the correct XPaths for the data you need. The `discover.py` script is provided for this purpose.
 
 ### Running the Discovery Script
 
