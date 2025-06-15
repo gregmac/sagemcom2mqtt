@@ -6,6 +6,8 @@ import logging
 import sys
 import aiohttp
 import paho.mqtt.client as mqtt
+from paho.mqtt.properties import Properties
+from paho.mqtt.packettypes import PacketTypes
 from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
 import traceback
@@ -134,7 +136,7 @@ async def main():
         return
 
     # MQTT mode
-    mqtt_client = mqtt.Client()
+    mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv5)
     if mqtt_username:
         mqtt_client.username_pw_set(mqtt_username, mqtt_password)
     
@@ -149,9 +151,12 @@ async def main():
         docsis_data = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
 
         if docsis_data:
+            # Set MQTTv5 properties for message expiry
+            properties = Properties(PacketTypes.PUBLISH)
+            properties.MessageExpiryInterval = poll_interval * 4
             # Publish to MQTT
-            mqtt_client.publish(mqtt_topic, json.dumps(docsis_data))
-            _LOGGER.info(f"Published to {mqtt_topic}: {docsis_data}")
+            mqtt_client.publish(mqtt_topic, json.dumps(docsis_data), properties=properties)
+            _LOGGER.info(f"Published to {mqtt_topic} with expiry of {poll_interval * 4}s: {docsis_data}")
 
         # Wait for the next interval
         await asyncio.sleep(poll_interval)
