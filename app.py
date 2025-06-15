@@ -74,18 +74,18 @@ def parse_docsis_data(device_info):
         'status': cable_modem.get('status', 'UNKNOWN'),
         'ipv4_address': wan_ipv4_address,
         'downstream': {
-            'power_avg_dbmv': round(sum(ds_power) / len(ds_power), 2) if ds_power else 0,
-            'power_min_dbmv': min(ds_power) if ds_power else 0,
-            'power_max_dbmv': max(ds_power) if ds_power else 0,
+            'power_avg_dbmv': round(sum(ds_power) / len(ds_power), 1) if ds_power else 0,
+            'power_min_dbmv': round(min(ds_power), 1) if ds_power else 0,
+            'power_max_dbmv': round(max(ds_power), 1) if ds_power else 0,
             'snr_avg_db': round(sum(ds_snr) / len(ds_snr), 2) if ds_snr else 0,
             'channels': len(downstream_channels),
             'correctable_sum': correctable,
             'uncorrectable_sum': uncorrectable,
         },
         'upstream': {
-            'power_avg_dbmv': round(sum(us_power) / len(us_power), 2) if us_power else 0,
-            'power_min_dbmv': min(us_power) if us_power else 0,
-            'power_max_dbmv': max(us_power) if us_power else 0,
+            'power_avg_dbmv': round(sum(us_power) / len(us_power), 1) if us_power else 0,
+            'power_min_dbmv': round(min(us_power), 1) if us_power else 0,
+            'power_max_dbmv': round(max(us_power), 1) if us_power else 0,
             'channels': len(upstream_channels),
         }
     }
