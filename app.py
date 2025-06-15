@@ -49,6 +49,18 @@ def parse_docsis_data(device_info):
         _LOGGER.error("Could not retrieve any DOCSIS information. Please check XPaths and modem mode.")
         return None, None
 
+    # Find the specific WAN IPv4 address by iterating through the interfaces
+    wan_ipv4_address = None
+    ip_interfaces = device_info.get("device", {}).get("IP", {}).get("interfaces", [])
+    for interface in ip_interfaces:
+        ipv4_addresses = interface.get("i_pv4_addresses", [])
+        for address in ipv4_addresses:
+            if address.get("alias") == "IP_DATA_ADDRESS":
+                wan_ipv4_address = address.get("ip_address")
+                break  # Found it, no need to search further in this interface
+        if wan_ipv4_address:
+            break  # Found it, no need to search further in other interfaces
+            
     ds_power = [float(ch['power_level']) for ch in downstream_channels if 'power_level' in ch and ch.get('power_level')]
     us_power = [float(ch['power_level']) for ch in upstream_channels if 'power_level' in ch and ch.get('power_level')]
     ds_snr = [float(ch['SNR']) for ch in downstream_channels if 'SNR' in ch and ch.get('SNR')]
@@ -58,6 +70,7 @@ def parse_docsis_data(device_info):
     # Data to be published to MQTT
     mqtt_data = {
         'status': cable_modem.get('status', 'UNKNOWN'),
+        'ipv4_address': wan_ipv4_address,
         'downstream': {
             'power_avg_dbmv': round(sum(ds_power) / len(ds_power), 2) if ds_power else 0,
             'power_min_dbmv': min(ds_power) if ds_power else 0,

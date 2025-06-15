@@ -31,6 +31,7 @@ class TestModemDataParsing(unittest.TestCase):
                 self.assertIn('downstream', mqtt_data)
                 self.assertIn('upstream', mqtt_data)
                 self.assertIn('status', mqtt_data)
+                self.assertIn('ipv4_address', mqtt_data)
                 
                 # 3. Check for logical values in mqtt_data
                 self.assertGreaterEqual(mqtt_data['downstream']['channels'], 0)
@@ -47,6 +48,10 @@ class TestModemDataParsing(unittest.TestCase):
                 
                 self.assertIsInstance(device_metadata['serial_number'], str, "Serial number is not a string")
                 self.assertTrue(device_metadata['serial_number'], "Serial number is blank")
+
+                # The WAN IP can be None if not found, athough it should always be present.
+                if mqtt_data.get('ipv4_address') is not None:
+                    self.assertIsInstance(mqtt_data['ipv4_address'], str)
 
 
 if __name__ == '__main__':
