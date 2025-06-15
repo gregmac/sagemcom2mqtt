@@ -32,18 +32,21 @@ The following DOCSIS data points are collected and published:
 
 The application is configured using environment variables.
 
-| Variable             | Description                                       | Default                   | Required |
-| -------------------- | ------------------------------------------------- | ------------------------- | -------- |
-| `MODEM_HOSTNAME`     | The hostname or IP address of the Sagemcom modem. |                           | Yes      |
-| `MODEM_USERNAME`     | The username for the modem's web interface.       |                           | Yes      |
-| `MODEM_PASSWORD`     | The password for the modem's web interface.       |                           | Yes      |
-| `MODEM_ENCRYPTION`   | The encryption method used for authentication.    | `SHA512`                  | No       |
-| `POLL_INTERVAL`      | The interval in seconds to poll the modem for data. | `30`                      | No       |
-| `MQTT_HOSTNAME`      | The hostname or IP address of the MQTT broker.    |                           | No*      |
-| `MQTT_PORT`          | The port of the MQTT broker.                      | `1883`                    | No       |
-| `MQTT_USERNAME`      | The username for the MQTT broker.                 |                           | No       |
-| `MQTT_PASSWORD`      | The password for the MQTT broker.                 |                           | No       |
-| `MQTT_TOPIC`         | The MQTT topic to publish data to.                | `sagemcom/docsis/status`  | No       |
+| Variable                          | Description                                                                                                                              | Default                            | Required |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------- |
+| `MODEM_HOSTNAME`                  | The hostname or IP address of the Sagemcom modem.                                                                                        |                                    | Yes      |
+| `MODEM_USERNAME`                  | The username for the modem's web interface.                                                                                              |                                    | Yes      |
+| `MODEM_PASSWORD`                  | The password for the modem's web interface.                                                                                              |                                    | Yes      |
+| `MODEM_ENCRYPTION`                | The encryption method used for authentication.                                                                                           | `SHA512`                           | No       |
+| `POLLING_INTERVAL_SECONDS`        | The interval in seconds to poll the modem for data.                                                                                      | `30`                               | No       |
+| `MQTT_HOSTNAME`                   | The hostname or IP address of the MQTT broker.                                                                                           |                                    | No*      |
+| `MQTT_PORT`                       | The port of the MQTT broker.                                                                                                             | `1883`                             | No       |
+| `MQTT_USERNAME`                   | The username for the MQTT broker.                                                                                                        |                                    | No       |
+| `MQTT_PASSWORD`                   | The password for the MQTT broker.                                                                                                        |                                    | No       |
+| `MQTT_TOPIC`                      | The base topic to publish messages to. The device serial number and metric path will be appended.                                        | `sagemcom/docsis`                  | No       |
+| `MESSAGE_EXPIRY_SECONDS`          | The number of seconds after which MQTT messages should expire.                                                                           | `POLLING_INTERVAL_SECONDS * 4`     | No       |
+| `HOMEASSISTANT_DISCOVERY_PREFIX`  | If set, the application will publish discovery messages for Home Assistant. Set to your discovery prefix, e.g., `homeassistant`.         |                                    | No       |
+
 -   **Note:** If `MQTT_HOSTNAME` is not provided, the application will run in a one-shot test mode. It will connect to the modem, read the data, print it to the console, and then exit.
 
 ## Running with Docker

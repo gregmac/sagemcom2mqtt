@@ -12,6 +12,8 @@ from sagemcom_api.client import SagemcomClient
 from sagemcom_api.enums import EncryptionMethod
 import traceback
 
+__version__ = "1.1.0"
+
 # Basic logging configuration for the application
 logging.basicConfig(
     level=logging.INFO,
@@ -105,6 +107,72 @@ trace_config = aiohttp.TraceConfig()
 trace_config.on_request_start.append(on_request_start)
 trace_config.on_request_end.append(on_request_end)
 
+def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, base_topic):
+    """Publishes the Home Assistant discovery configuration for all sensors."""
+    _LOGGER.info(f"Publishing Home Assistant discovery config to prefix: {discovery_prefix}")
+
+    serial_number = device_metadata.get("serial_number")
+    
+    # Map the requested device fields to the standard Home Assistant device object format.
+    device_payload = {
+        "identifiers": [serial_number],
+        "name": f"{device_metadata.get('manufacturer')} {device_metadata.get('model_number')}",
+        "manufacturer": device_metadata.get('manufacturer'),
+        "model": device_metadata.get('model_number'),
+        "sw_version": device_metadata.get('software_version'),
+        "hw_version": device_metadata.get('hardware_version'),
+    }
+
+    # Map the requested origin fields to the standard Home Assistant origin object format.
+    origin_payload = {
+        "name": "sagemcom2mqtt",
+        "sw_version": __version__,
+        "url": "https://github.com/gregmac/sagemcom2mqtt"
+    }
+
+    # Define how each piece of data maps to a Home Assistant sensor.
+    sensors = {
+        "status": {"name": "Status", "icon": "mdi:check-circle"},
+        "ipv4_address": {"name": "WAN IPv4 Address", "icon": "mdi:ip-network"},
+        "downstream/power_avg_dbmv": {"name": "Downstream Power Avg", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "downstream/power_min_dbmv": {"name": "Downstream Power Min", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "downstream/power_max_dbmv": {"name": "Downstream Power Max", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "downstream/snr_avg_db": {"name": "Downstream SNR Avg", "unit_of_measurement": "dB", "device_class": "signal_strength", "state_class": "measurement"},
+        "downstream/channels": {"name": "Downstream Channels", "icon": "mdi:counter", "state_class": "measurement"},
+        "downstream/correctable_sum": {"name": "Downstream Correctable Errors", "icon": "mdi:counter", "state_class": "total_increasing"},
+        "downstream/uncorrectable_sum": {"name": "Downstream Uncorrectable Errors", "icon": "mdi:counter", "state_class": "total_increasing"},
+        "upstream/power_avg_dbmv": {"name": "Upstream Power Avg", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "upstream/power_min_dbmv": {"name": "Upstream Power Min", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "upstream/power_max_dbmv": {"name": "Upstream Power Max", "unit_of_measurement": "dBmV", "device_class": "signal_strength", "state_class": "measurement"},
+        "upstream/channels": {"name": "Upstream Channels", "icon": "mdi:counter", "state_class": "measurement"},
+    }
+
+    for metric_path, config in sensors.items():
+        object_id = metric_path.replace('/', '_')
+        unique_id = f"{serial_number}_{object_id}"
+        
+        config_topic = f"{discovery_prefix}/sensor/{serial_number}/{object_id}/config"
+        
+        # The state topic must match where the data is actually published.
+        state_topic = f"{base_topic}/{serial_number}/{metric_path}"
+
+        payload = {
+            "name": f"Sagemcom {config['name']}",
+            "state_topic": state_topic,
+            "unique_id": unique_id,
+            "device": device_payload,
+            "origin": origin_payload,
+            "availability_topic": f"{base_topic}/{serial_number}/status",
+            "payload_available": "OPERATIONAL",
+            "payload_not_available": "OFFLINE", # A placeholder, modem doesn't have a specific offline status
+        }
+        
+        # Add optional keys from our sensor definition
+        payload.update({k: v for k, v in config.items() if k not in ["name"]})
+
+        mqtt_client.publish(config_topic, json.dumps(payload), retain=True)
+        _LOGGER.debug(f"Published discovery config for {unique_id} to {config_topic}")
+
 async def get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method):
     """
     Retrieves DOCSIS information from the Sagemcom modem.
@@ -149,6 +217,7 @@ async def main():
     mqtt_username = os.getenv("MQTT_USERNAME")
     mqtt_password = os.getenv("MQTT_PASSWORD")
     mqtt_topic = os.getenv("MQTT_TOPIC", "sagemcom/docsis")
+    ha_discovery_prefix = os.getenv("HOMEASSISTANT_DISCOVERY_PREFIX")
 
     if not all([modem_hostname, modem_username, modem_password]):
         _LOGGER.error("Error: MODEM_HOSTNAME, MODEM_USERNAME, and MODEM_PASSWORD must be set.")
@@ -179,6 +248,7 @@ async def main():
         _LOGGER.error(f"Error connecting to MQTT broker: {e}")
         return
 
+    discovery_published = False
     while True:
         result = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
 
@@ -187,6 +257,11 @@ async def main():
             serial_number = device_metadata.get('serial_number') if device_metadata else None
 
             if mqtt_data and serial_number:
+                # Publish Home Assistant discovery on the first successful data fetch
+                if ha_discovery_prefix and not discovery_published:
+                    publish_ha_discovery_config(mqtt_client, ha_discovery_prefix, device_metadata, mqtt_topic)
+                    discovery_published = True
+
                 # Log the collected (but not published) metadata
                 _LOGGER.info(f"Collected device metadata: {device_metadata}")
 
