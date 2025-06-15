@@ -19,31 +19,34 @@ class TestModemDataParsing(unittest.TestCase):
                     modem_data = json.load(f)
 
                 # Call the parsing function with the test data
-                parsed_data = parse_docsis_data(modem_data)
+                mqtt_data, device_metadata = parse_docsis_data(modem_data)
 
-                # 1. Basic sanity checks
-                self.assertIsNotNone(parsed_data, "Parsing returned None")
-                self.assertIsInstance(parsed_data, dict, "Parsing did not return a dictionary")
+                # 1. Basic sanity checks for both returned objects
+                self.assertIsNotNone(mqtt_data, "MQTT data parsing returned None")
+                self.assertIsInstance(mqtt_data, dict, "MQTT data is not a dictionary")
+                self.assertIsNotNone(device_metadata, "Device metadata parsing returned None")
+                self.assertIsInstance(device_metadata, dict, "Device metadata is not a dictionary")
 
-                # 2. Check for key metrics and their types
-                expected_keys = {
-                    'ds_power_avg': float,
-                    'us_power_avg': float,
-                    'ds_snr_avg': float,
-                    'correctable_sum': int,
-                    'uncorrectable_sum': int,
-                    'downstream_channels': int,
-                    'upstream_channels': int,
-                }
+                # 2. Check for key metrics and their types in mqtt_data
+                self.assertIn('downstream', mqtt_data)
+                self.assertIn('upstream', mqtt_data)
+                self.assertIn('status', mqtt_data)
+                
+                # 3. Check for logical values in mqtt_data
+                self.assertGreaterEqual(mqtt_data['downstream']['channels'], 0)
+                self.assertGreaterEqual(mqtt_data['upstream']['channels'], 0)
+                self.assertGreater(mqtt_data['downstream']['channels'] + mqtt_data['upstream']['channels'], 0, "No channels were found")
 
-                for key, expected_type in expected_keys.items():
-                    self.assertIn(key, parsed_data, f"Key '{key}' is missing from parsed data")
-                    self.assertIsInstance(parsed_data[key], expected_type, f"Key '{key}' has incorrect type")
-
-                # 3. Check for logical values
-                self.assertGreaterEqual(parsed_data['downstream_channels'], 0)
-                self.assertGreaterEqual(parsed_data['upstream_channels'], 0)
-                self.assertGreater(parsed_data['downstream_channels'] + parsed_data['upstream_channels'], 0, "No channels were found")
+                # 4. Check for device_metadata content
+                expected_metadata_keys = [
+                    'serial_number', 'manufacturer', 'model_number', 
+                    'mac_address', 'hardware_version', 'software_version'
+                ]
+                for key in expected_metadata_keys:
+                    self.assertIn(key, device_metadata, f"Key '{key}' is missing from device_metadata")
+                
+                self.assertIsInstance(device_metadata['serial_number'], str, "Serial number is not a string")
+                self.assertTrue(device_metadata['serial_number'], "Serial number is blank")
 
 
 if __name__ == '__main__':

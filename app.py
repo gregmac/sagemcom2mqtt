@@ -32,14 +32,14 @@ async def on_request_end(session, trace_config_ctx, params):
 def parse_docsis_data(device_info):
     """
     Parses the DOCSIS information from the raw device info dictionary.
-    Returns a tuple of (parsed_data, serial_number).
+    Returns a tuple of (mqtt_data, device_metadata).
     """
     if not device_info:
         _LOGGER.error("Device info is empty, cannot parse DOCSIS data.")
         return None, None
 
     # Navigate the structure in Python
-    serial_number = device_info.get("device", {}).get("device_info", {}).get("serial_number")
+    device_info_data = device_info.get("device", {}).get("device_info", {})
     docsis_data = device_info.get("device", {}).get("docsis", {})
     cable_modem = docsis_data.get("cable_modem", {})
     downstream_channels = cable_modem.get("downstreams", [])
@@ -55,8 +55,8 @@ def parse_docsis_data(device_info):
     correctable = sum([int(ch['correctable_codewords']) for ch in downstream_channels if 'correctable_codewords' in ch and ch.get('correctable_codewords')])
     uncorrectable = sum([int(ch['uncorrectable_codewords']) for ch in downstream_channels if 'uncorrectable_codewords' in ch and ch.get('uncorrectable_codewords')])
 
-    # Prepare data for MQTT in a nested structure for individual publishing
-    data = {
+    # Data to be published to MQTT
+    mqtt_data = {
         'status': cable_modem.get('status', 'UNKNOWN'),
         'downstream': {
             'power_avg_dbmv': round(sum(ds_power) / len(ds_power), 2) if ds_power else 0,
@@ -75,7 +75,17 @@ def parse_docsis_data(device_info):
         }
     }
 
-    return data, serial_number
+    # Additional metadata (not for MQTT)
+    device_metadata = {
+        'serial_number': device_info_data.get('serial_number'),
+        'manufacturer': device_info_data.get('manufacturer'),
+        'model_number': device_info_data.get('model_number'),
+        'mac_address': device_info_data.get('mac_address'),
+        'hardware_version': device_info_data.get('hardware_version'),
+        'software_version': device_info_data.get('software_version'),
+    }
+
+    return mqtt_data, device_metadata
 
 # Create a TraceConfig for logging HTTP requests
 trace_config = aiohttp.TraceConfig()
@@ -160,8 +170,13 @@ async def main():
         result = await get_docsis_data(modem_hostname, modem_username, modem_password, encryption_method)
 
         if result:
-            docsis_data, serial_number = result
-            if docsis_data and serial_number:
+            mqtt_data, device_metadata = result
+            serial_number = device_metadata.get('serial_number') if device_metadata else None
+
+            if mqtt_data and serial_number:
+                # Log the collected (but not published) metadata
+                _LOGGER.info(f"Collected device metadata: {device_metadata}")
+
                 base_topic = f"{mqtt_topic}/{serial_number}"
                 properties = Properties(PacketTypes.PUBLISH)
                 properties.MessageExpiryInterval = poll_interval * 4
@@ -177,9 +192,9 @@ async def main():
                             mqtt_client.publish(full_topic, str(value), properties=properties)
                             _LOGGER.info(f"Published to {full_topic}: {value}")
                 
-                publish_metrics([base_topic], docsis_data)
+                publish_metrics([base_topic], mqtt_data)
                 
-            elif docsis_data:
+            elif mqtt_data:
                 _LOGGER.warning(f"Could not determine serial number. Cannot publish individual metrics.")
 
         # Wait for the next interval
