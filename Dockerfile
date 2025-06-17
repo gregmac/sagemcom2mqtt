@@ -2,16 +2,17 @@
 FROM python:3.9-slim
 
 # Set the working directory in the container
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Copy the requirements file into the container at /usr/src/app
-COPY requirements.txt .
+# Copy the new project structure
+COPY src/ /app/src/
+COPY pyproject.toml /app/
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the application and its dependencies
+RUN pip install .
 
-# Copy the rest of the application's code from the host to the container at /usr/src/app
-COPY . .
+# Copy the modem data for testing
+COPY modems/ /app/modems/
 
-# Run app.py when the container launches
-CMD ["python", "app.py"] 
+# Use the new console script as the entrypoint
+ENTRYPOINT ["sagemcom2mqtt"] 

@@ -28,6 +28,30 @@ The following DOCSIS data points are collected and published:
 -   Upstream Average Power (dBmV)
 -   Upstream Max Power (dBmV)
 
+## Installation
+
+To run the application, it is recommended to first install it as a package. This can be done from the root of the project directory.
+
+```sh
+pip install .
+```
+
+For development, you can install it in "editable" mode, which allows you to make changes to the source code without reinstalling. To include the testing dependencies, use:
+
+```sh
+pip install -e .[test]
+```
+
+## Usage
+
+Once installed, the application provides three command-line scripts:
+
+*   `sagemcom2mqtt`: The main application to poll the modem and publish to MQTT.
+*   `sagemcom2mqtt-discover`: A tool to explore the modem's API.
+*   `sagemcom2mqtt-anonymize`: A tool to anonymize a modem data dump.
+
+These commands can be run directly from your terminal.
+
 ## Configuration
 
 The application is configured using environment variables.
@@ -57,70 +81,35 @@ To run the application using Docker, follow these steps:
 1.  **Build the Docker image:**
 
     ```sh
-    docker build -t sagemcom-mqtt .
+    docker build -t sagemcom2mqtt .
     ```
 
 2.  **Run the Docker container:**
 
-    ### Example: Polling a modem and publishing to MQTT
+    Pass the configuration as environment variables.
+
     ```sh
-    docker run -d --name sagemcom-mqtt \
+    docker run -d --name sagemcom2mqtt \
       -e MODEM_HOSTNAME="192.168.100.1" \
       -e MODEM_USERNAME="admin" \
       -e MODEM_PASSWORD="your_modem_password" \
       -e MQTT_HOSTNAME="your_mqtt_broker" \
       --restart unless-stopped \
-      sagemcom-mqtt
+      sagemcom2mqtt
     ```
-    
-    ### Example: One-shot test mode
-    ```sh
-    docker run --rm \
-      -e MODEM_HOSTNAME="192.168.100.1" \
-      -e MODEM_USERNAME="admin" \
-      -e MODEM_PASSWORD="your_modem_password" \
-      sagemcom-mqtt
-    ```
-
-### Docker Compose
-
-Alternatively, you can use `docker-compose`. Create a `docker-compose.yml` file like this:
-
-```yaml
-version: '3'
-services:
-  sagemcom-mqtt:
-    build: .
-    container_name: sagemcom-mqtt
-    restart: unless-stopped
-    environment:
-      - MODEM_HOSTNAME=192.168.100.1
-      - MODEM_USERNAME=admin
-      - MODEM_PASSWORD=your_modem_password
-      # - MODEM_ENCRYPTION=MD5
-      - MQTT_HOSTNAME=your_mqtt_broker
-      # - MQTT_USERNAME=your_mqtt_user
-      # - MQTT_PASSWORD=your_mqtt_password
-      # - MQTT_TOPIC=sagemcom/docsis/status
-      # - POLL_INTERVAL=60
-```
-
-Then, run it with:
-```sh
-docker-compose up -d
-```
 
 ## Running Tests
 
-This project includes a unit test suite to validate the data parsing logic against sample modem data.
+This project uses `pytest` for unit testing. The tests validate the data parsing logic against sample modem data.
 
-### Local
-To run the tests locally, ensure you have installed the dependencies from `requirements.txt` and run:
+To run the tests, first install the project in editable mode with the test dependencies (see Installation section), then run:
+
 ```sh
-python test_app.py
+pytest
 ```
 
 ### Using Docker
+
 To run the tests within a Docker container, you must first build the image. Then, you can execute the test script inside a new container.
 
 1.  **Build the image:**
@@ -130,10 +119,10 @@ To run the tests within a Docker container, you must first build the image. Then
 
 2.  **Run the tests:**
     ```sh
-    docker run --rm sagemcom-mqtt python test_app.py
+    docker run --rm sagemcom2mqtt pytest
     ```
 
-## Discovering API Paths (discover.py)
+## Discovering API Paths
 
 The `sagemcom_api` library allows you to explore the device's API to find the correct XPaths for the data you need. The `discover.py` script is provided for this purpose.
 
@@ -159,13 +148,13 @@ The script will connect to the modem and print its API data structure as a large
     or using Docker:
 
     ```sh
-    docker run --rm sagemcom-mqtt python discover.py > modems/my_modem_dump.json
+    docker run --rm sagemcom2mqtt sagemcom2mqtt-discover > modems/my_modem_dump.json
     ```
 
 3.  The resulting `.json` file can then be inspected to find the correct paths for your device, or used as a new test case for the unit tests.
 
 4.  You can also explore specific sub-paths by passing them as an argument:
     ```sh
-    python discover.py Device/Docsis/cable_modem/downstreams
+    sagemcom2mqtt-discover Device/Docsis/cable_modem/downstreams
     ```
 4.  Once you find the correct paths for the downstream, upstream, and interface status data, you can update the `get_docsis_data` function in `app.py`. 

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sagemcom2mqtt"
+version = "1.1.0"
+authors = [
+  { name="Gregmac", email="greg@gregmac.dev" },
+]
+description = "A Python application to read DOCSIS data from a Sagemcom modem and publish it to MQTT."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "aiohttp",
+    "paho-mqtt",
+    "python-sagemcom-api"
+]
+
+[project.urls]
+Homepage = "https://github.com/gregmac/sagemcom2mqtt"
+Issues = "https://github.com/gregmac/sagemcom2mqtt/issues"
+
+[project.scripts]
+sagemcom2mqtt = "sagemcom2mqtt.app:main_cli"
+sagemcom2mqtt-discover = "sagemcom2mqtt.discover:main"
+sagemcom2mqtt-anonymize = "sagemcom2mqtt.anonymize:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+] 

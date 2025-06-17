@@ -50,7 +50,16 @@ async def main():
             print(json.dumps(value, indent=4))
 
     except Exception as e:
-        logging.error(f"An error occurred during discovery: {e}", exc_info=True)
+        print(f"An error occurred: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    """Command-line interface entry point for discovery."""
+    try:
+        asyncio.run(discover_api())
+    except KeyboardInterrupt:
+        print("\nDiscovery process interrupted by user.", file=sys.stderr)
+        sys.exit(0)
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main() 

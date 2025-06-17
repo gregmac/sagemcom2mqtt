@@ -352,5 +352,13 @@ async def main():
         # Wait for the next interval
         await asyncio.sleep(poll_interval)
 
+def main_cli():
+    """Command-line interface entry point."""
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        _LOGGER.info("Process interrupted by user.")
+        sys.exit(0)
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main_cli() 

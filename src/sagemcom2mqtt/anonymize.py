@@ -3,6 +3,7 @@ import random
 import string
 import re
 import ipaddress
+import argparse
 
 # --- Global State & Mappings ---
 FAKE_SERIAL_NUMBER = 'JW' + ''.join(random.choice(string.digits) for _ in range(12))
@@ -160,27 +161,39 @@ def anonymize_data(data):
     else:
         return data
 
-# --- Main Execution ---
-def main():
-    """Main function to read, process, and overwrite the JSON file."""
-    input_filename = 'modem.json'
+def anonymize_file(input_file, output_file):
+    """
+    Reads a JSON file, anonymizes its contents, and writes the anonymized data to a new file.
+    """
+    if not input_file or not output_file:
+        print("Error: Both input and output file paths must be provided.")
+        return
+
     try:
-        with open(input_filename, 'r', encoding='utf-8') as f:
-            modem_data = json.load(f)
+        with open(input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
 
-        anonymized_modem_data = anonymize_data(modem_data)
+        anonymized_data = anonymize_data(data)
 
-        with open(input_filename, 'w', encoding='utf-8') as f:
-            json.dump(anonymized_modem_data, f, indent=4)
-
-        print(f"Successfully anonymized '{input_filename}' with the new and improved rules.")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(anonymized_data, f, indent=4)
+            print(f"Anonymized data written to {output_file}")
 
     except FileNotFoundError:
-        print(f"Error: '{input_filename}' not found.")
+        print(f"Error: '{input_file}' not found.")
     except json.JSONDecodeError:
-        print(f"Error: Could not decode JSON from '{input_filename}'.")
+        print(f"Error: Could not decode JSON from '{input_file}'.")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-if __name__ == '__main__':
+def main():
+    """Command-line interface entry point for anonymizer."""
+    parser = argparse.ArgumentParser(description='Anonymize a Sagemcom modem JSON data file.')
+    parser.add_argument('input_file', help='The path to the input JSON file.')
+    parser.add_argument('output_file', nargs='?', default=None, help='The path to the output JSON file. Defaults to (input).anonymized.json.')
+    args = parser.parse_args()
+
+    anonymize_file(args.input_file, args.output_file)
+
+if __name__ == "__main__":
     main() 
