@@ -1,0 +1,34 @@
+{
+    "mqtt_data": {
+        "status": "OPERATIONAL",
+        "ipv4_address": "10.127.225.88",
+        "downstream": {
+            "power_avg_dbmv": 3.6,
+            "power_min_dbmv": 1.0,
+            "power_max_dbmv": 6.6,
+            "snr_avg_db": 41.4,
+            "channels": 25,
+            "correctable_sum": 1303172630,
+            "uncorrectable_sum": 116516924
+        },
+        "upstream": {
+            "power_avg_dbmv": 32.7,
+            "power_min_dbmv": 32.3,
+            "power_max_dbmv": 33.3,
+            "channels": 4
+        },
+        "system": {
+            "cpu_usage": 0,
+            "load_average_1m": 0.02,
+            "free_memory_percentage": 62
+        }
+    },
+    "device_metadata": {
+        "serial_number": "JW667925371771",
+        "manufacturer": "Sagemcom",
+        "model_number": "FAST3896",
+        "mac_address": "9C:24:72:FC:C0:6D",
+        "hardware_version": "1.1",
+        "software_version": "FAST3896UM_CCX_sw18.83.15.16v-38"
+    }
+}
