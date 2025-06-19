@@ -30,6 +30,7 @@ Issues = "https://github.com/gregmac/sagemcom2mqtt/issues"
 sagemcom2mqtt = "sagemcom2mqtt.app:main_cli"
 sagemcom2mqtt-discover = "sagemcom2mqtt.discover:main"
 sagemcom2mqtt-anonymize = "sagemcom2mqtt.anonymize:main"
+sagemcom2mqtt-parse = "sagemcom2mqtt.parse_file:main"
 
 [project.optional-dependencies]
 test = [

@@ -49,6 +49,7 @@ Once installed, the application provides three command-line scripts:
 *   `sagemcom2mqtt`: The main application to poll the modem and publish to MQTT.
 *   `sagemcom2mqtt-discover`: A tool to explore the modem's API.
 *   `sagemcom2mqtt-anonymize`: A tool to anonymize a modem data dump.
+*   `sagemcom2mqtt-parse`: A utility to parse a local data file and print the output. Useful for creating new test snapshots.
 
 These commands can be run directly from your terminal.
 
@@ -106,6 +107,12 @@ To run the tests, first install the project in editable mode with the test depen
 
 ```sh
 pytest
+```
+
+To create or update a test snapshot (`.expected.json` file) for a new modem data file, you can use the `sagemcom2mqtt-parse` utility:
+
+```sh
+sagemcom2mqtt-parse modems/NEW_MODEM_DATA.json > modems/NEW_MODEM_DATA.expected.json
 ```
 
 ### Using Docker
