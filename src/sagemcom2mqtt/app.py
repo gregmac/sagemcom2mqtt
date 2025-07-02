@@ -130,6 +130,10 @@ def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, 
 
     serial_number = device_metadata.get("serial_number")
     
+    # Get poll interval for expire_after
+    poll_interval = int(os.getenv("POLL_INTERVAL", 30))
+    expire_after = poll_interval * 4
+    
     # Map the requested device fields to the standard Home Assistant device object format.
     device_payload = {
         "identifiers": [serial_number],
@@ -185,6 +189,7 @@ def publish_ha_discovery_config(mqtt_client, discovery_prefix, device_metadata, 
             "availability_topic": f"{base_topic}/{serial_number}/status",
             "payload_available": "OPERATIONAL",
             "payload_not_available": "OFFLINE", # A placeholder, modem doesn't have a specific offline status
+            "expire_after": expire_after,
         }
         
         # Add optional keys from our sensor definition
