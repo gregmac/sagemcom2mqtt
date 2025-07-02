@@ -1,3 +1,6 @@
+[![Docker Image](https://img.shields.io/badge/ghcr.io-gregmac/sagemcom2mqtt-blue?logo=docker)](https://github.com/users/gregmac/packages/container/package/sagemcom2mqtt)
+[![Build and Publish](https://github.com/gregmac/sagemcom2mqtt/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/gregmac/sagemcom2mqtt/actions/workflows/docker-publish.yml)
+
 # Sagemcom Modem DOCSIS Data to MQTT Reader
 
 This Python application reads DOCSIS data from a Sagemcom modem and publishes it to an MQTT broker. It can be run as a service using Docker.
