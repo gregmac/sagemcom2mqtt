@@ -1,170 +1,189 @@
 [![Docker Image](https://img.shields.io/badge/ghcr.io-gregmac/sagemcom2mqtt-blue?logo=docker)](https://github.com/users/gregmac/packages/container/package/sagemcom2mqtt)
 [![Build and Publish](https://github.com/gregmac/sagemcom2mqtt/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/gregmac/sagemcom2mqtt/actions/workflows/docker-publish.yml)
 
-# Sagemcom Modem DOCSIS Data to MQTT Reader
+# Sagemcom2MQTT
 
-This Python application reads DOCSIS data from a Sagemcom modem and publishes it to an MQTT broker. It can be run as a service using Docker.
+This Python application reads DOCSIS data from a Sagemcom modem and publishes it to an MQTT broker. It is designed to run easily in Docker, but can also be run directly from source.
 
 ## Features
 
--   Connects to Sagemcom modems using `python-sagemcom-api`.
--   Polls the modem at a user-defined interval.
--   Gathers key DOCSIS metrics.
--   Publishes data to an MQTT broker.
--   Supports a one-shot test mode for quick diagnostics without MQTT.
--   Runs in a Docker container for easy deployment and isolation.
+- 🚀 **Easy integration**: Connects to Sagemcom modems using [python-sagemcom-api](https://github.com/iMicknl/python-sagemcom-api)
+- 📊 **Comprehensive metrics**: Collects DOCSIS stats (power, SNR, channel status) plus system usage
+- ⏱️ **Configurable polling**: Polls your modem at a user-defined interval and publishes results to MQTT
+- 🏠 **Home Assistant ready**: Publishes [Home Assistant auto-discovery](https://www.home-assistant.io/integrations/mqtt#mqtt-discovery) messages for all sensors
+- 🐳 **Runs anywhere**: Designed for easy deployment in Docker, but can also run directly from Python
+- 🧪 **Test & debug modes**: Supports one-shot test mode for diagnostics without MQTT
 
 ### Data Supported
 
-The following DOCSIS data points are collected and published:
+The following data points are collected and published:
 
--   Registration Status
--   Operational status
--   Number of connected downstream channels
--   Downstream Min Power (dBmV)
--   Downstream Average Power (dBmV)
--   Downstream Max Power (dBmV)
--   Downstream Average SNR (dB)
--   Downstream Max SNR (dB)
--   Number of connected upstream channels
--   Upstream Min Power (dBmV)
--   Upstream Average Power (dBmV)
--   Upstream Max Power (dBmV)
+-   Registration and Operational Status
+-   DOCSIS stats
+    -   Number of connected downstream and upstream channels
+    -   Downstream Min, Average and Max Power (dBmV)
+    -   Downstream Average and Max SNR (dB)
+    -   Upstream Min, Average and Max Power (dBmV)
+-   Load average (1m)
+-   Memory usage (%)
+-   System information including serial number, MAC address 
+-   IP address
 
 ## Installation
 
-To run the application, it is recommended to first install it as a package. This can be done from the root of the project directory.
+### Recommended: Run from Docker
+
+The easiest way to run Sagemcom2MQTT is using the pre-built Docker image from GitHub Container Registry.
+
+```sh
+docker pull ghcr.io/gregmac/sagemcom2mqtt:latest
+```
+
+Run the container, passing configuration as environment variables:
+
+```sh
+docker run -d --name sagemcom2mqtt \
+  -e MODEM_HOSTNAME="192.168.100.1" \
+  -e MODEM_USERNAME="admin" \
+  -e MODEM_PASSWORD="your_modem_password" \
+  -e MQTT_HOSTNAME="your_mqtt_broker" \
+  --restart unless-stopped \
+  ghcr.io/gregmac/sagemcom2mqtt:latest
+```
+
+See [Configuration](#configuration) for all options.
+
+### Alternatives
+
+#### Build and run local Docker image
+
+From the root of the cloned repository:
+
+```sh
+docker build -t sagemcom2mqtt .
+docker run -d --name sagemcom2mqtt ... sagemcom2mqtt
+```
+
+#### Run from Python directly
+
+Install the package:
 
 ```sh
 pip install .
 ```
 
-For development, you can install it in "editable" mode, which allows you to make changes to the source code without reinstalling. To include the testing dependencies, use:
+Or for development:
 
 ```sh
 pip install -e .[test]
 ```
 
-## Usage
+Then run:
 
-Once installed, the application provides three command-line scripts:
+```sh
+sagemcom2mqtt
+```
 
-*   `sagemcom2mqtt`: The main application to poll the modem and publish to MQTT.
-*   `sagemcom2mqtt-discover`: A tool to explore the modem's API.
-*   `sagemcom2mqtt-anonymize`: A tool to anonymize a modem data dump.
-*   `sagemcom2mqtt-parse`: A utility to parse a local data file and print the output. Useful for creating new test snapshots.
-
-These commands can be run directly from your terminal.
+---
 
 ## Configuration
 
 The application is configured using environment variables.
 
-| Variable                          | Description                                                                                                                              | Default                            | Required |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------- |
-| `MODEM_HOSTNAME`                  | The hostname or IP address of the Sagemcom modem.                                                                                        |                                    | Yes      |
-| `MODEM_USERNAME`                  | The username for the modem's web interface.                                                                                              |                                    | Yes      |
-| `MODEM_PASSWORD`                  | The password for the modem's web interface.                                                                                              |                                    | Yes      |
-| `MODEM_ENCRYPTION`                | The encryption method used for authentication.                                                                                           | `SHA512`                           | No       |
-| `POLLING_INTERVAL_SECONDS`        | The interval in seconds to poll the modem for data.                                                                                      | `30`                               | No       |
-| `LOG_LEVEL`                       | The log level for the application's output. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.                                                  | `INFO`                             | No       |
-| `MQTT_HOSTNAME`                   | The hostname or IP address of the MQTT broker.                                                                                           |                                    | No*      |
-| `MQTT_PORT`                       | The port of the MQTT broker.                                                                                                             | `1883`                             | No       |
-| `MQTT_USERNAME`                   | The username for the MQTT broker.                                                                                                        |                                    | No       |
-| `MQTT_PASSWORD`                   | The password for the MQTT broker.                                                                                                        |                                    | No       |
-| `MQTT_TOPIC`                      | The base topic to publish messages to. The device serial number and metric path will be appended.                                        | `sagemcom/docsis`                  | No       |
-| `MESSAGE_EXPIRY_SECONDS`          | The number of seconds after which MQTT messages should expire.                                                                           | `POLLING_INTERVAL_SECONDS * 4`     | No       |
-| `HOMEASSISTANT_DISCOVERY_PREFIX`  | If set, the application will publish discovery messages for Home Assistant. Set to your discovery prefix, e.g., `homeassistant`.         |                                    | No       |
+| Variable                          | Description                                                                                       | Default                            | Required     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------ |
+| `MODEM_HOSTNAME`                  | The hostname or IP address of the Sagemcom modem.                                                 |                                    | ✅ Yes      |
+| `MODEM_USERNAME`                  | The username for the modem's web interface.                                                       |                                    | ✅ Yes      |
+| `MODEM_PASSWORD`                  | The password for the modem's web interface.                                                       |                                    | ✅ Yes      |
+| `MODEM_ENCRYPTION`                | The encryption method used for authentication.                                                    | `SHA512`                           | -            |
+| `POLLING_INTERVAL_SECONDS`        | The interval in seconds to poll the modem for data.                                               | `30`                               | -            |
+| `LOG_LEVEL`                       | The log level for the application's output. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.           | `INFO`                             | -            |
+| `MQTT_HOSTNAME`                   | The hostname or IP address of the MQTT broker.                                                    |                                    | *️⃣ For MQTT |
+| `MQTT_PORT`                       | The port of the MQTT broker.                                                                      | `1883`                             | -            |
+| `MQTT_USERNAME`                   | The username for the MQTT broker.                                                                 |                                    | -            |
+| `MQTT_PASSWORD`                   | The password for the MQTT broker.                                                                 |                                    | -            |
+| `MQTT_TOPIC`                      | The base topic to publish messages to. The device serial number and metric path will be appended. | `sagemcom/docsis`                  | -            |
+| `MESSAGE_EXPIRY_SECONDS`          | The number of seconds after which MQTT messages should expire.                                    | `POLLING_INTERVAL_SECONDS * 4`     | -            |
+| `HOMEASSISTANT_DISCOVERY_PREFIX`  | If set, the application will publish discovery messages for Home Assistant                        | `homeassistant`                    | -            |
 
--   **Note:** If `MQTT_HOSTNAME` is not provided, the application will run in a one-shot test mode. It will connect to the modem, read the data, print it to the console, and then exit.
+- *️⃣ **Note:** If `MQTT_HOSTNAME` is not provided, the application will run in a one-shot test mode. It will connect to the modem, read the data, print it to the console, and then exit.
 
-## Running with Docker
+---
 
-To run the application using Docker, follow these steps:
+## Supported Devices
 
-1.  **Build the Docker image:**
+In theory any device supported by [python-sagemcom-api](https://github.com/iMicknl/python-sagemcom-api) with the expected data structure will work.
 
-    ```sh
-    docker build -t sagemcom2mqtt .
-    ```
+Verified models:
 
-2.  **Run the Docker container:**
+| Device Model        | Firmware Version                  |
+|---------------------|-----------------------------------|
+| Sagemcom FAST3896   | FAST3896UM_CCX_sw18.83.15.16v-38  |
 
-    Pass the configuration as environment variables.
+---
 
-    ```sh
-    docker run -d --name sagemcom2mqtt \
-      -e MODEM_HOSTNAME="192.168.100.1" \
-      -e MODEM_USERNAME="admin" \
-      -e MODEM_PASSWORD="your_modem_password" \
-      -e MQTT_HOSTNAME="your_mqtt_broker" \
-      --restart unless-stopped \
-      sagemcom2mqtt
-    ```
+## Development
 
-## Running Tests
+### Adding New Devices
 
-This project uses `pytest` for unit testing. The tests validate the data parsing logic against sample modem data.
+To add support for a new Sagemcom modem model:
 
-To run the tests, first install the project in editable mode with the test dependencies (see Installation section), then run:
+1. **Discover API paths:**
+   - Use the `sagemcom2mqtt-discover` tool to dump the modem's API structure:
+     ```sh
+     # Set your modem credentials (example for PowerShell)
+     $env:MODEM_HOSTNAME="192.168.100.1"
+     $env:MODEM_USERNAME="your_username"
+     $env:MODEM_PASSWORD="your_password"
+     sagemcom2mqtt-discover > modems/my_modem_dump.json
+     ```
+   - Or using Docker:
+     ```sh
+     docker run --rm ghcr.io/gregmac/sagemcom2mqtt:latest sagemcom2mqtt-discover > modems/my_modem_dump.json
+     ```
+2. **Parse and test:**
+   - Use `sagemcom2mqtt-parse` to parse the dump and print the output:
+     ```sh
+     sagemcom2mqtt-parse modems/my_modem_dump.json
+     ```
+   - To create a test snapshot:
+     ```sh
+     sagemcom2mqtt-parse modems/my_modem_dump.json > modems/my_modem_dump.expected.json
+     ```
+3. **Anonymize before sharing:**
+   - Before committing or sharing modem dumps, anonymize them:
+     ```sh
+     sagemcom2mqtt-anonymize modems/my_modem_dump.json > modems/my_modem_dump.anonymized.json
+     ```
 
-```sh
-pytest
-```
+If your device uses different API paths, update the `get_docsis_data` function in `app.py` accordingly.
 
-To create or update a test snapshot (`.expected.json` file) for a new modem data file, you can use the `sagemcom2mqtt-parse` utility:
+### Running Tests
 
-```sh
-sagemcom2mqtt-parse modems/NEW_MODEM_DATA.json > modems/NEW_MODEM_DATA.expected.json
-```
+This project uses `pytest` for unit testing. To run tests:
 
-### Using Docker
+1. Install in editable mode with test dependencies:
+   ```sh
+   pip install -e .[test]
+   ```
+2. Run tests:
+   ```sh
+   pytest
+   ```
 
-To run the tests within a Docker container, you must first build the image. Then, you can execute the test script inside a new container.
+#### Using Docker
 
-1.  **Build the image:**
-    ```sh
-    docker build -t sagemcom-mqtt .
-    ```
+1. Build the image:
+   ```sh
+   docker build -t sagemcom2mqtt .
+   ```
+2. Run tests:
+   ```sh
+   docker run --rm sagemcom2mqtt pytest
+   ```
 
-2.  **Run the tests:**
-    ```sh
-    docker run --rm sagemcom2mqtt pytest
-    ```
+---
 
-## Discovering API Paths
+## License
 
-The `sagemcom_api` library allows you to explore the device's API to find the correct XPaths for the data you need. The `discover.py` script is provided for this purpose.
-
-### Running the Discovery Script
-
-The script will connect to the modem and print its API data structure as a large JSON object to your console. To save this output for analysis or for use with the unit tests, you can redirect the output to a file.
-
-1.  Set the same environment variables you use for the main application (`MODEM_HOSTNAME`, `MODEM_USERNAME`, `MODEM_PASSWORD`).
-
-2.  Run the script and redirect the output to a new file in the `modems` directory.
-
-    **Example:**
-    ```sh
-    # Set your modem credentials first (example for PowerShell)
-    $env:SAGEMCOM_HOSTNAME="192.168.100.1"
-    $env:SAGEMCOM_USERNAME="your_username"
-    $env:SAGEMCOM_PASSWORD="your_password"
-
-    # Run the script and save the output
-    python discover.py > modems/my_modem_dump.json
-    ```
-
-    or using Docker:
-
-    ```sh
-    docker run --rm sagemcom2mqtt sagemcom2mqtt-discover > modems/my_modem_dump.json
-    ```
-
-3.  The resulting `.json` file can then be inspected to find the correct paths for your device, or used as a new test case for the unit tests.
-
-4.  You can also explore specific sub-paths by passing them as an argument:
-    ```sh
-    sagemcom2mqtt-discover Device/Docsis/cable_modem/downstreams
-    ```
-4.  Once you find the correct paths for the downstream, upstream, and interface status data, you can update the `get_docsis_data` function in `app.py`. 
+This project is licensed under the GNU General Public License v3.0. 
